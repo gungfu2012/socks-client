@@ -112,6 +112,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 			resp.Body.Read(httpbody[0:bufmax])
 			reqret.rep = 0x00
 		}
+		resp.Body.Close()
 	}
 
 	reqret.ver = 0x05
