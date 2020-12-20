@@ -101,9 +101,10 @@ func socks5handshark(conn net.Conn, index int) bool {
 		req.dstport[1] = recvbuf[9]
 
 		//执行cmd
+		fmt.Println("index :", index, "...start to post handshark")
 		body := bytes.NewReader(recvbuf[4:10])
 		hc := &http.Client{}
-		hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/handshark", body)
+		hreq, _ := http.NewRequest("POST", "https://socks-server-758011.asia1.kinto.io/handshark", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
 		if resp.StatusCode != 200 {
@@ -112,6 +113,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 			resp.Body.Read(httpbody[0:bufmax])
 			reqret.rep = 0x00
 		}
+		fmt.Println("index :", index, "...end to post handshark,the statuscoed is :", resp.StatusCode)
 		resp.Body.Close()
 	}
 
@@ -150,15 +152,18 @@ func post(conn net.Conn, index int) {
 	hc := &http.Client{}
 	for {
 		n, _ := conn.Read(recvbuf[0:bufmax])
+		fmt.Println("index :", index, "...read from client,the data lenth is :", n)
 		if n <= 0 {
 			conn.Close()
-			hc.CloseIdleConnections()
+			//hc.CloseIdleConnections()
 			break
 		}
+		fmt.Println("index :", index, "...start to post data")
 		body := bytes.NewReader(recvbuf[0:n])
-		hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/post", body)
+		hreq, _ := http.NewRequest("POST", "https://socks-server-758011.asia1.kinto.io/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
+		fmt.Println("index :", index, "...end to post data,the status code is :", resp.StatusCode)
 		resp.Body.Close()
 	}
 }
@@ -168,29 +173,37 @@ func get(conn net.Conn, index int) {
 	var sendbuf [bufmax]byte //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
 	hc := &http.Client{}
-	hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
+	hreq, _ := http.NewRequest("GET", "https://socks-server-758011.asia1.kinto.io/get", nil)
 	hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 	for {
+		fmt.Println("index :", index, "...start to get data")
 		resp, _ := hc.Do(hreq)
-		n, _ := resp.Body.Read(sendbuf[0:bufmax])
+		fmt.Println("index :", index, "...end to get data,the status code is :", resp.StatusCode)
+		for { //数据量大时，可能一次不能完全读完，所以需要循环读取
+			n, _ := resp.Body.Read(sendbuf[0:bufmax])
+			if n <= 0 {
+				//conn.Close()
+				break
+			}
+			fmt.Println("index :", index, "...send to client,the data lenth is :", n)
+			n, _ = conn.Write(sendbuf[0:n])
+		}
+		//n, _ := resp.Body.Read(sendbuf[0:bufmax])
 		resp.Body.Close()
-		if n <= 0 {
-			conn.Close()
-			hc.CloseIdleConnections()
-			break
-		}
-		n, _ = conn.Write(sendbuf[0:n])
-		if n <= 0 {
-			conn.Close()
-			hc.CloseIdleConnections()
-			break
-		}
+
+		//fmt.Println("index :", index, "...send to client,the data lenth is :", n)
+		//n, _ = conn.Write(sendbuf[0:n])
+		//if n <= 0 {
+		//	conn.Close()
+		//	//hc.CloseIdleConnections()
+		//	break
+		//}
 	}
 }
 func handleconnection(conn net.Conn, index int) {
 	//socks5handshark
 	ret := socks5handshark(conn, index)
-	fmt.Println(ret)
+	//fmt.Println(ret)
 	if ret != true {
 		conn.Close()
 		return
@@ -209,6 +222,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("start to listen 1080 port")
 	defer l.Close()
 	var index int
 	index = 0
@@ -221,6 +235,7 @@ func main() {
 			continue
 		}
 		//handleconnection
+		fmt.Println("got a connection from client, the index is :", index)
 		go handleconnection(conn, index)
 		index = (index + 1) % 65536
 	}
