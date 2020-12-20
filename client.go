@@ -66,7 +66,6 @@ func socks5handshark(conn net.Conn, index int) bool {
 		ver.methods[i] = recvbuf[i+2]
 	}
 	if ver.ver != 0x5 {
-		conn.Close()
 		return false
 	}
 	for _, method := range ver.methods {
@@ -147,13 +146,19 @@ func post(conn net.Conn, index int) {
 	var recvbuf [bufmax]byte //客户端数据接收缓冲区
 	//var sendbuf [bufmax]byte  //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
+	hc := &http.Client{}
 	for {
 		n, _ := conn.Read(recvbuf[0:bufmax])
+		if n <= 0 {
+			conn.Close()
+			hc.CloseIdleConnections()
+			break
+		}
 		body := bytes.NewReader(recvbuf[0:n])
-		hc := &http.Client{}
 		hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
-		hc.Do(hreq)
+		resp, _ := hc.Do(hreq)
+		resp.Body.Close()
 	}
 }
 
@@ -161,13 +166,24 @@ func get(conn net.Conn, index int) {
 	//var recvbuf [bufmax]byte //客户端数据接收缓冲区
 	var sendbuf [bufmax]byte //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
+	hc := &http.Client{}
+	hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
+	hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 	for {
-		hc := &http.Client{}
-		hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
-		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
 		n, _ := resp.Body.Read(sendbuf[0:bufmax])
-		conn.Write(sendbuf[0:n])
+		resp.Body.Close()
+		if n <= 0 {
+			conn.Close()
+			hc.CloseIdleConnections()
+			break
+		}
+		n, _ = conn.Write(sendbuf[0:n])
+		if n <= 0 {
+			conn.Close()
+			hc.CloseIdleConnections()
+			break
+		}
 	}
 }
 func handleconnection(conn net.Conn, index int) {
@@ -175,6 +191,7 @@ func handleconnection(conn net.Conn, index int) {
 	ret := socks5handshark(conn, index)
 	fmt.Println(ret)
 	if ret != true {
+		conn.Close()
 		return
 	}
 
@@ -199,6 +216,7 @@ func main() {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Fatal(err)
+			conn.Close()
 			continue
 		}
 		//handleconnection
