@@ -1,63 +1,188 @@
 package main
 
 import (
-	"io"
+	"bytes"
+	"fmt"
 	"log"
 	"net"
-	"net/url"
 	"net/http"
-	"fmt"
-	"flag"
+	"strconv"
 )
 
+type vermsg struct {
+	ver     uint8
+	nmethod uint8
+	methods [255]uint8
+} //定义socks5版本包结构-接收
+
+type vermsgret struct {
+	ver    uint8
+	method uint8
+} //定义socks5版本包结构-发送
+
+type reqmsg struct {
+	ver     uint8
+	cmd     uint8
+	rsv     uint8
+	atyp    uint8
+	dstaddr [4]uint8
+	dstport [2]uint8
+} //定义socks5请求包结构-接收
+
+type reqmsgret struct {
+	ver     uint8
+	rep     uint8
+	rsv     uint8
+	atyp    uint8
+	bndaddr [4]uint8
+	bndport [2]uint8
+} //定义socks5请求包结构-发送
+
 const bufmax = 1 << 20
-var addr = flag.String("addr", "gungfusocksweb.cfapps.io:4443", "https service address")
+
+//var addr = flag.String("addr", "gungfusocksweb.cfapps.io:4443", "https service address")
+
 //var addr = flag.String("addr", "127.0.0.1:8080", "http service address")
 
-func handleconnection(conn net.Conn) {
-	//first handshark
-	var buf[bufmax]byte
-	n, err :=conn.Read(buf[0:bufmax])
-	r :=
-	
-	//second handshark
+//socks5handshark完成socks5协议的握手，返回握手成功与否
+func socks5handshark(conn net.Conn, index int) bool {
+
+	var recvbuf [bufmax]byte  //客户端数据接收缓冲区
+	var sendbuf [bufmax]byte  //客户端数据发送缓冲区
+	var httpbody [bufmax]byte //httpbody缓冲区
+	var ver vermsg            //版本包
+	var verret vermsgret      //版本响应包
+	var req reqmsg            //请求包
+	var reqret reqmsgret      //请求响应包
+
+	conn.Read(recvbuf[0:bufmax]) //读取客户端版本包
+
+	verret.ver = 0x05
+	verret.method = 0xFF
+	ver.ver = recvbuf[0]
+	ver.nmethod = recvbuf[1]
+	var i uint8
+	for i = 0; i < ver.nmethod; i++ {
+		ver.methods[i] = recvbuf[i+2]
+	}
+	if ver.ver != 0x5 {
+		conn.Close()
+		return false
+	}
+	for _, method := range ver.methods {
+		if method == 0x00 {
+			verret.method = method
+			break
+		}
+	}
+
+	sendbuf[0] = verret.ver
+	sendbuf[1] = verret.method
+	conn.Write(sendbuf[0:2]) //向客户端发送响应包
+
+	conn.Read(recvbuf[0:bufmax]) //读取客户端请求包
+
+	req.ver = recvbuf[0]
+	req.cmd = recvbuf[1]
+	req.rsv = recvbuf[2]
+	req.atyp = recvbuf[3]
+
+	if req.atyp != 0x01 {
+		//地址类型不接受
+		reqret.rep = 0x08
+	} else if req.cmd != 0x01 {
+		//命令类型不接受
+		reqret.rep = 0x07
+	} else {
+		req.dstaddr[0] = recvbuf[4]
+		req.dstaddr[1] = recvbuf[5]
+		req.dstaddr[2] = recvbuf[6]
+		req.dstaddr[3] = recvbuf[7]
+		req.dstport[0] = recvbuf[8]
+		req.dstport[1] = recvbuf[9]
+
+		//执行cmd
+		body := bytes.NewReader(recvbuf[4:10])
+		hc := &http.Client{}
+		hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/handshark", body)
+		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
+		resp, _ := hc.Do(hreq)
+		if resp.StatusCode != 200 {
+			reqret.rep = 0x01
+		} else {
+			resp.Body.Read(httpbody[0:bufmax])
+			reqret.rep = 0x00
+		}
+	}
+
+	reqret.ver = 0x05
+	reqret.rsv = 0x00
+	reqret.atyp = 0x01
+	reqret.bndaddr[0] = 0x00
+	reqret.bndaddr[1] = 0x00
+	reqret.bndaddr[2] = 0x00
+	reqret.bndaddr[3] = 0x00
+	reqret.bndport[0] = 0x00
+	reqret.bndaddr[2] = 0x00
+
+	sendbuf[0] = reqret.ver
+	sendbuf[1] = reqret.rep
+	sendbuf[2] = reqret.rsv
+	sendbuf[3] = reqret.atyp
+	sendbuf[4] = reqret.bndaddr[0]
+	sendbuf[5] = reqret.bndaddr[1]
+	sendbuf[6] = reqret.bndaddr[2]
+	sendbuf[7] = reqret.bndaddr[3]
+	sendbuf[8] = reqret.bndport[0]
+	sendbuf[9] = reqret.bndport[1]
+
+	conn.Write(sendbuf[0:10])
+	if reqret.rep != 0x00 {
+		return false
+	}
+	return true
+}
+
+func post(conn net.Conn, index int) {
+	var recvbuf [bufmax]byte //客户端数据接收缓冲区
+	//var sendbuf [bufmax]byte  //客户端数据发送缓冲区
+	//var httpbody [bufmax]byte //httpbody缓冲区
+	for {
+		n, _ := conn.Read(recvbuf[0:bufmax])
+		body := bytes.NewReader(recvbuf[0:n])
+		hc := &http.Client{}
+		hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/post", body)
+		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
+		hc.Do(hreq)
+	}
+}
+
+func get(conn net.Conn, index int) {
+	//var recvbuf [bufmax]byte //客户端数据接收缓冲区
+	var sendbuf [bufmax]byte //客户端数据发送缓冲区
+	//var httpbody [bufmax]byte //httpbody缓冲区
+	for {
+		hc := &http.Client{}
+		hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
+		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
+		resp, _ := hc.Do(hreq)
+		n, _ := resp.Body.Read(sendbuf[0:bufmax])
+		conn.Write(sendbuf[0:n])
+	}
+}
+func handleconnection(conn net.Conn, index int) {
+	//socks5handshark
+	ret := socks5handshark(conn, index)
+	fmt.Println(ret)
+	if ret != true {
+		return
+	}
 
 	//go read from conn and POST to server
+	go post(conn, index)
 
 	//go GET from server and write to conn
-}
-
-func tun2remote(conn net.Conn, conn_ws *websocket.Conn) {
-	var buf [bufmax]byte
-	if conn == nil || conn_ws == nil {
-		return
-	}
-	for {
-		n, err :=conn.Read(buf[0:bufmax])
-		if err != nil {
-			fmt.Println(err)
-			conn.Close()
-			conn_ws.Close()
-			return
-		}
-		conn_ws.WriteMessage(websocket.BinaryMessage, buf[0:n])
-	}
-}
-
-func tun2local(conn_ws *websocket.Conn, conn net.Conn) {
-	if conn == nil || conn_ws == nil {
-		return
-	}
-	for {
-		_, message, err := conn_ws.ReadMessage()
-		if err != nil {
-			fmt.Println(err)
-			conn_ws.Close()
-			conn.Close()
-			return
-		}
-		_, err = conn.Write(message[0:])
-	}
+	go get(conn, index)
 }
 
 func main() {
@@ -67,6 +192,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer l.Close()
+	var index int
+	index = 0
 	for {
 		// Wait for a connection.
 		conn, err := l.Accept()
@@ -75,6 +202,7 @@ func main() {
 			continue
 		}
 		//handleconnection
-		go handleconnection(conn)
+		go handleconnection(conn, index)
+		index = (index + 1) % 65536
 	}
 }
