@@ -200,6 +200,11 @@ func get(conn net.Conn, index int) {
 		}
 		fmt.Println("index :", index, "...start to get data")
 		resp, _ := hc.Do(hreq)
+		if resp.StatusCode == http.StatusBadRequest {
+			resp.Body.Close()
+			conn.Close()
+			break
+		}
 		fmt.Println("index :", index, "...end to get data,the status code is :", resp.StatusCode)
 		buf, err := ioutil.ReadAll(resp.Body)
 		fmt.Println("index :", index, "...read from remote ,the err is :", err)
@@ -207,27 +212,10 @@ func get(conn net.Conn, index int) {
 		fmt.Println("index :", index, "...send data to client ,the err is :", err, ",the data length is :", n)
 		if err != nil {
 			conn.Close()
+			resp.Body.Close()
 			break
 		}
-		/*for { //数据量大时，可能一次不能完全读完，所以需要循环读取
-			n, _ := resp.Body.Read(sendbuf[0:bufmax])
-			if n <= 0 {
-				//conn.Close()
-				break
-			}
-			fmt.Println("index :", index, "...send to client,the data lenth is :", n)
-			n, _ = conn.Write(sendbuf[0:n])
-		}*/
-		//n, _ := resp.Body.Read(sendbuf[0:bufmax])
 		resp.Body.Close()
-
-		//fmt.Println("index :", index, "...send to client,the data lenth is :", n)
-		//n, _ = conn.Write(sendbuf[0:n])
-		//if n <= 0 {
-		//	conn.Close()
-		//	//hc.CloseIdleConnections()
-		//	break
-		//}
 	}
 }
 func handleconnection(conn net.Conn, index int) {
