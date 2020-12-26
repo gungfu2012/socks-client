@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type vermsg struct {
@@ -39,6 +40,12 @@ type reqmsgret struct {
 	bndaddr [4]uint8
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
+
+const hostname = "https://dark-haze-d12c.gungfu2012.workers.dev"
+
+//const hostname = "https://socks-server-758011.asia1.kinto.io"
+
+//const hostname ="http://127.0.0.1:8080"
 
 const bufmax = 1 << 20
 
@@ -106,7 +113,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 		fmt.Println("index :", index, "...start to post handshark")
 		body := bytes.NewReader(recvbuf[4:10])
 		hc := &http.Client{}
-		hreq, _ := http.NewRequest("POST", "https://socks-server-758011.asia1.kinto.io/handshark", body)
+		hreq, _ := http.NewRequest("POST", hostname+"/handshark", body)
 		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/handshark", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
@@ -165,9 +172,13 @@ func post(conn net.Conn, index int) {
 			//hc.CloseIdleConnections()
 			break
 		}
+		if n == 0 {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
 		fmt.Println("index :", index, "...start to post data")
 		body := bytes.NewReader(recvbuf[0:n])
-		hreq, _ := http.NewRequest("POST", "https://socks-server-758011.asia1.kinto.io/post", body)
+		hreq, _ := http.NewRequest("POST", hostname+"/post", body)
 		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
@@ -181,7 +192,7 @@ func get(conn net.Conn, index int) {
 	//var sendbuf [bufmax]byte //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
 	hc := &http.Client{}
-	hreq, _ := http.NewRequest("GET", "https://socks-server-758011.asia1.kinto.io/get", nil)
+	hreq, _ := http.NewRequest("GET", hostname+"/get", nil)
 	//hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
 	hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 	for {
