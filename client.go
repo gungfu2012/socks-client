@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 type vermsg struct {
@@ -173,7 +172,7 @@ func post(conn net.Conn, index int) {
 			break
 		}
 		if n == 0 {
-			time.Sleep(100 * time.Millisecond)
+			//time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		fmt.Println("index :", index, "...start to post data")
