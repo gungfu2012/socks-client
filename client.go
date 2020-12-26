@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -105,6 +107,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 		body := bytes.NewReader(recvbuf[4:10])
 		hc := &http.Client{}
 		hreq, _ := http.NewRequest("POST", "https://socks-server-758011.asia1.kinto.io/handshark", body)
+		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/handshark", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
 		if resp.StatusCode != 200 {
@@ -151,9 +154,13 @@ func post(conn net.Conn, index int) {
 	//var httpbody [bufmax]byte //httpbody缓冲区
 	hc := &http.Client{}
 	for {
-		n, _ := conn.Read(recvbuf[0:bufmax])
+		if conn == nil {
+			fmt.Println("the client conn is closed")
+			return
+		}
+		n, err := conn.Read(recvbuf[0:bufmax])
 		fmt.Println("index :", index, "...read from client,the data lenth is :", n)
-		if n <= 0 {
+		if err == io.EOF {
 			conn.Close()
 			//hc.CloseIdleConnections()
 			break
@@ -161,6 +168,7 @@ func post(conn net.Conn, index int) {
 		fmt.Println("index :", index, "...start to post data")
 		body := bytes.NewReader(recvbuf[0:n])
 		hreq, _ := http.NewRequest("POST", "https://socks-server-758011.asia1.kinto.io/post", body)
+		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
 		fmt.Println("index :", index, "...end to post data,the status code is :", resp.StatusCode)
@@ -170,16 +178,29 @@ func post(conn net.Conn, index int) {
 
 func get(conn net.Conn, index int) {
 	//var recvbuf [bufmax]byte //客户端数据接收缓冲区
-	var sendbuf [bufmax]byte //客户端数据发送缓冲区
+	//var sendbuf [bufmax]byte //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
 	hc := &http.Client{}
 	hreq, _ := http.NewRequest("GET", "https://socks-server-758011.asia1.kinto.io/get", nil)
+	//hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
 	hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 	for {
+		if conn == nil {
+			fmt.Println("the client conn is closed")
+			return
+		}
 		fmt.Println("index :", index, "...start to get data")
 		resp, _ := hc.Do(hreq)
 		fmt.Println("index :", index, "...end to get data,the status code is :", resp.StatusCode)
-		for { //数据量大时，可能一次不能完全读完，所以需要循环读取
+		buf, err := ioutil.ReadAll(resp.Body)
+		fmt.Println("index :", index, "...read from remote ,the err is :", err)
+		n, err := conn.Write(buf)
+		fmt.Println("index :", index, "...send data to client ,the err is :", err, ",the data length is :", n)
+		if err != nil {
+			conn.Close()
+			break
+		}
+		/*for { //数据量大时，可能一次不能完全读完，所以需要循环读取
 			n, _ := resp.Body.Read(sendbuf[0:bufmax])
 			if n <= 0 {
 				//conn.Close()
@@ -187,7 +208,7 @@ func get(conn net.Conn, index int) {
 			}
 			fmt.Println("index :", index, "...send to client,the data lenth is :", n)
 			n, _ = conn.Write(sendbuf[0:n])
-		}
+		}*/
 		//n, _ := resp.Body.Read(sendbuf[0:bufmax])
 		resp.Body.Close()
 
