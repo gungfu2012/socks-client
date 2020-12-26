@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -165,8 +164,8 @@ func post(conn net.Conn, index int) {
 			return
 		}
 		n, err := conn.Read(recvbuf[0:bufmax])
-		fmt.Println("index :", index, "...read from client,the data lenth is :", n)
-		if err == io.EOF {
+		fmt.Println("index :", index, "...read from client,the data lenth is :", n, "the error is :", err)
+		if err != nil {
 			conn.Close()
 			//hc.CloseIdleConnections()
 			break
