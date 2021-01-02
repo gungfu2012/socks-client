@@ -39,11 +39,11 @@ type reqmsgret struct {
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
 
-//const hostname = "https://socks-server-758011.asia1.kinto.io"
+const hostname = "https://dark-haze-d12c.gungfu2012.workers.dev"
 
 //const hostname = "https://socks-server-758011.asia1.kinto.io"
 
-const hostname = "http://127.0.0.1:8080"
+//const hostname ="http://127.0.0.1:8080"
 
 const bufmax = 1 << 20
 
@@ -93,30 +93,28 @@ func socks5handshark(conn net.Conn, index int) bool {
 	req.rsv = recvbuf[2]
 	req.atyp = recvbuf[3]
 
-	var body *bytes.Reader
-	var x_atyp string
-	switch req.atyp {
-	case 0x01:
-		body = bytes.NewReader(recvbuf[4:10])
-		x_atyp = "1"
-	case 0x03:
-		body = bytes.NewReader(recvbuf[5 : 5+recvbuf[4]+2])
-		x_atyp = "3"
-	case 0x04:
-		body = bytes.NewReader(recvbuf[4:22])
-		x_atyp = "4"
-	}
-	switch req.cmd {
-	case 0x01:
+	if req.atyp != 0x01 {
+		//地址类型不接受
+		reqret.rep = 0x08
+	} else if req.cmd != 0x01 {
+		//命令类型不接受
+		reqret.rep = 0x07
+	} else {
+		req.dstaddr[0] = recvbuf[4]
+		req.dstaddr[1] = recvbuf[5]
+		req.dstaddr[2] = recvbuf[6]
+		req.dstaddr[3] = recvbuf[7]
+		req.dstport[0] = recvbuf[8]
+		req.dstport[1] = recvbuf[9]
+
+		//执行cmd
 		fmt.Println("index :", index, "...start to post handshark")
-		fmt.Println("the ip and port is :", body)
+		body := bytes.NewReader(recvbuf[4:10])
 		hc := &http.Client{}
 		hreq, _ := http.NewRequest("POST", hostname+"/handshark", body)
 		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/handshark", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
-		hreq.Header.Add("x-atyp-2955", x_atyp)
-		resp, err := hc.Do(hreq)
-		fmt.Println("the error is :", err)
+		resp, _ := hc.Do(hreq)
 		if resp.StatusCode != 200 {
 			reqret.rep = 0x01
 		} else {
@@ -125,21 +123,17 @@ func socks5handshark(conn net.Conn, index int) bool {
 		}
 		fmt.Println("index :", index, "...end to post handshark,the statuscoed is :", resp.StatusCode)
 		resp.Body.Close()
-	case 0x03:
-		reqret.rep = 0x00
-	default:
-		reqret.rep = 0x07
 	}
 
 	reqret.ver = 0x05
 	reqret.rsv = 0x00
 	reqret.atyp = 0x01
-	reqret.bndaddr[0] = 127
-	reqret.bndaddr[1] = 0
-	reqret.bndaddr[2] = 0
-	reqret.bndaddr[3] = 1
-	reqret.bndport[0] = 4
-	reqret.bndport[1] = 57
+	reqret.bndaddr[0] = 0x00
+	reqret.bndaddr[1] = 0x00
+	reqret.bndaddr[2] = 0x00
+	reqret.bndaddr[3] = 0x00
+	reqret.bndport[0] = 0x00
+	reqret.bndaddr[2] = 0x00
 
 	sendbuf[0] = reqret.ver
 	sendbuf[1] = reqret.rep
@@ -153,7 +147,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 	sendbuf[9] = reqret.bndport[1]
 
 	conn.Write(sendbuf[0:10])
-	if reqret.rep != 0x00 || req.cmd == 0x03 {
+	if reqret.rep != 0x00 {
 		return false
 	}
 	return true
@@ -240,46 +234,6 @@ func handleconnection(conn net.Conn, index int) {
 	go get(conn, index)
 }
 
-func handleudp(lp net.PacketConn) {
-	var buf [bufmax]byte
-	for {
-		n, addr, _ := lp.ReadFrom(buf[0:bufmax])
-		fmt.Println("got udp data,the length is :", n)
-		if n <= 0 {
-			continue
-		}
-		go postudp(lp, addr, buf[0:n])
-	}
-
-}
-
-func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
-	var headerlen = 0
-	hc := &http.Client{}
-	switch data[4] {
-	case 0x01:
-		headerlen = 0x0A
-		fmt.Println("udp data is ipv4")
-	case 0x04:
-		headerlen = 0x16
-		fmt.Println("udp data is ipv6")
-	default:
-		fmt.Println("udp data is domain")
-	}
-	body := bytes.NewReader(data[headerlen:])
-	hreq, _ := http.NewRequest("POST", hostname+"/dns", body)
-	resp, _ := hc.Do(hreq)
-	buf, _ := ioutil.ReadAll(resp.Body)
-	var sendbuf [bufmax]byte
-	for i := 0; i < headerlen; i++ {
-		sendbuf[i] = data[i]
-	}
-	for i := headerlen; i-headerlen < len(buf); i++ {
-		sendbuf[i] = buf[i-headerlen]
-	}
-	lp.WriteTo(sendbuf[0:headerlen+len(buf)], addr)
-}
-
 func main() {
 	// Listen on TCP port 1080 on all interfaces.
 	l, err := net.Listen("tcp", ":1080")
@@ -288,13 +242,6 @@ func main() {
 	}
 	fmt.Println("start to listen 1080 port")
 	defer l.Close()
-	lp, err := net.ListenPacket("udp", ":1081")
-	if err != nil {
-		log.Fatal(err)
-	}
-	go handleudp(lp)
-	fmt.Println("start to listen udp 1081 port")
-	defer lp.Close()
 	var index int
 	index = 0
 	for {
