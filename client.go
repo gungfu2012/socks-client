@@ -39,17 +39,15 @@ type reqmsgret struct {
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
 
-//const hostname = "https://socks-server-758011.asia1.kinto.io"
+//const hostname = "https://kintohub-gungfu2012-0.gungfu2012.workers.dev"
 
-//const hostname = "https://socks-server-758011.asia1.kinto.io"
+const hostname = "https://socks-server-758011.asia1.kinto.io"
 
-const hostname = "http://127.0.0.1:8080"
+//const hostname = "http://127.0.0.1:8080"
 
 const bufmax = 1 << 20
 
-//var addr = flag.String("addr", "gungfusocksweb.cfapps.io:4443", "https service address")
 
-//var addr = flag.String("addr", "127.0.0.1:8080", "http service address")
 
 //socks5handshark完成socks5协议的握手，返回握手成功与否
 func socks5handshark(conn net.Conn, index int) bool {
