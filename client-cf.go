@@ -39,9 +39,9 @@ type reqmsgret struct {
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
 
-//const hostname = "https://kintohub-gungfu2012-0.gungfu2012.workers.dev"
+const hostname = "https://kintohub-gungfu2012-0.gungfu2012.workers.dev"
 
-const hostname = "https://socks-server-758011.asia1.kinto.io"
+//const hostname = "https://socks-server-758011.asia1.kinto.io"
 
 //const hostname = "http://127.0.0.1:8080"
 
@@ -93,7 +93,6 @@ func socks5handshark(conn net.Conn, index int) bool {
 
 	var body *bytes.Reader
 	var x_atyp string
-	fmt.Println("the addr type is :",req.atyp)
 	switch req.atyp {
 	case 0x01:
 		body = bytes.NewReader(recvbuf[4:10])
