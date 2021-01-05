@@ -39,15 +39,12 @@ type reqmsgret struct {
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
 
-//const hostname = "https://kintohub-gungfu2012-0.gungfu2012.workers.dev"
-
-const hostname = "https://socks-server-758011.asia1.kinto.io"
-
-//const hostname = "http://127.0.0.1:8080"
+const hostnum = 7 //the num of hosts
+var hostarray [hostnum]string = [hostnum]string{
+			"http://127.0.0.1:8080", "https://socks-server-758011.asia1.kinto.io", "https://socks-server-11138b.us1.kinto.io", "https://socks-server-e4349c.eu1.kinto.io", "https://kintohub-gungfu2012-0.gungfu2012.workers.dev", "https://kintohub-gungfu2012-1.gungfu2012.workers.dev", "https://kintohub-gungfu2012-2.gungfu2012.workers.dev"} //the hosts list
+var hostname string //the selected server
 
 const bufmax = 1 << 20
-
-
 
 //socks5handshark完成socks5协议的握手，返回握手成功与否
 func socks5handshark(conn net.Conn, index int) bool {
@@ -93,7 +90,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 
 	var body *bytes.Reader
 	var x_atyp string
-	fmt.Println("the addr type is :",req.atyp)
+	fmt.Println("the addr type is :", req.atyp)
 	switch req.atyp {
 	case 0x01:
 		body = bytes.NewReader(recvbuf[4:10])
@@ -111,7 +108,6 @@ func socks5handshark(conn net.Conn, index int) bool {
 		fmt.Println("the ip and port is :", body)
 		hc := &http.Client{}
 		hreq, _ := http.NewRequest("POST", hostname+"/handshark", body)
-		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/handshark", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		hreq.Header.Add("x-atyp-2955", x_atyp)
 		resp, err := hc.Do(hreq)
@@ -182,7 +178,6 @@ func post(conn net.Conn, index int) {
 		fmt.Println("index :", index, "...start to post data")
 		body := bytes.NewReader(recvbuf[0:n])
 		hreq, _ := http.NewRequest("POST", hostname+"/post", body)
-		//hreq, _ := http.NewRequest("POST", "http://127.0.0.1:8080/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
 		fmt.Println("index :", index, "...end to post data,the status code is :", resp.StatusCode)
@@ -196,7 +191,6 @@ func get(conn net.Conn, index int) {
 	//var httpbody [bufmax]byte //httpbody缓冲区
 	hc := &http.Client{}
 	hreq, _ := http.NewRequest("GET", hostname+"/get", nil)
-	//hreq, _ := http.NewRequest("GET", "http://127.0.0.1:8080/get", nil)
 	hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 	for {
 		if conn == nil {
@@ -280,6 +274,15 @@ func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 }
 
 func main() {
+	for i := 0; i < hostnum; i++ {
+		fmt.Println("index : ", i)
+		fmt.Println(hostarray[i])
+	}
+	fmt.Println("select the server by input the index:")
+	var serverindex int
+	fmt.Scanf("%d", &serverindex)
+	hostname = hostarray[serverindex]
+	fmt.Println("the selected server is : ", hostarray[serverindex])
 	// Listen on TCP port 1080 on all interfaces.
 	l, err := net.Listen("tcp", ":1080")
 	if err != nil {
