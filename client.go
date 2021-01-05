@@ -39,9 +39,9 @@ type reqmsgret struct {
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
 
-const hostnum = 7 //the num of hosts
+const hostnum = 9 //the num of hosts
 var hostarray [hostnum]string = [hostnum]string{
-			"http://127.0.0.1:8080", "https://socks-server-758011.asia1.kinto.io", "https://socks-server-11138b.us1.kinto.io", "https://socks-server-e4349c.eu1.kinto.io", "https://kintohub-gungfu2012-0.gungfu2012.workers.dev", "https://kintohub-gungfu2012-1.gungfu2012.workers.dev", "https://kintohub-gungfu2012-2.gungfu2012.workers.dev"} //the hosts list
+			"http://127.0.0.1:8080", "https://socks-server-758011.asia1.kinto.io", "https://socks-server-11138b.us1.kinto.io", "https://socks-server-e4349c.eu1.kinto.io", "https://kintohub-eu.gungfu2012.workers.dev", "https://kintohub-us.gungfu2012.workers.dev", "https://kintohub-as1.gungfu2012.workers.dev", "https://kintohub-as2.gungfu2012.workers.dev", "https://kintohub-as3.gungfu2012.workers.dev"} //the hosts list
 var hostname string //the selected server
 
 const bufmax = 1 << 20
