@@ -39,6 +39,8 @@ type reqmsgret struct {
 	bndport [2]uint8
 } //定义socks5请求包结构-发送
 
+const opdata uint8 = 21 //the xor opdata
+
 const hostnum = 9 //the num of hosts
 var hostarray [hostnum]string = [hostnum]string{
 			"http://127.0.0.1:8080", "https://socks-server-758011.asia1.kinto.io", "https://socks-server-11138b.us1.kinto.io", "https://socks-server-e4349c.eu1.kinto.io", "https://kintohub-eu.gungfu2012.workers.dev", "https://kintohub-us.gungfu2012.workers.dev", "https://kintohub-as1.gungfu2012.workers.dev", "https://kintohub-as2.gungfu2012.workers.dev", "https://kintohub-as3.gungfu2012.workers.dev"} //the hosts list
@@ -81,12 +83,16 @@ func socks5handshark(conn net.Conn, index int) bool {
 	sendbuf[1] = verret.method
 	conn.Write(sendbuf[0:2]) //向客户端发送响应包
 
-	conn.Read(recvbuf[0:bufmax]) //读取客户端请求包
+	n, _ := conn.Read(recvbuf[0:bufmax]) //读取客户端请求包
 
 	req.ver = recvbuf[0]
 	req.cmd = recvbuf[1]
 	req.rsv = recvbuf[2]
 	req.atyp = recvbuf[3]
+
+	for i := 0; i < n; i++ {
+		recvbuf[i] = recvbuf[i] ^ opdata
+	}
 
 	var body *bytes.Reader
 	var x_atyp string
@@ -96,7 +102,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 		body = bytes.NewReader(recvbuf[4:10])
 		x_atyp = "1"
 	case 0x03:
-		body = bytes.NewReader(recvbuf[5 : 5+recvbuf[4]+2])
+		body = bytes.NewReader(recvbuf[5 : 5+(recvbuf[4]^opdata)+2])
 		x_atyp = "3"
 	case 0x04:
 		body = bytes.NewReader(recvbuf[4:22])
@@ -176,6 +182,9 @@ func post(conn net.Conn, index int) {
 			continue
 		}
 		fmt.Println("index :", index, "...start to post data")
+		for i := 0; i < n; i++ {
+			recvbuf[i] = recvbuf[i] ^ opdata
+		}
 		body := bytes.NewReader(recvbuf[0:n])
 		hreq, _ := http.NewRequest("POST", hostname+"/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
@@ -207,7 +216,11 @@ func get(conn net.Conn, index int) {
 		fmt.Println("index :", index, "...end to get data,the status code is :", resp.StatusCode)
 		buf, err := ioutil.ReadAll(resp.Body)
 		fmt.Println("index :", index, "...read from remote ,the err is :", err)
-		n, err := conn.Write(buf)
+		n := len(buf)
+		for i := 0; i < n; i++ {
+			buf[i] = buf[i] ^ opdata
+		}
+		n, err = conn.Write(buf)
 		fmt.Println("index :", index, "...send data to client ,the err is :", err, ",the data length is :", n)
 		if err != nil {
 			conn.Close()
@@ -249,7 +262,7 @@ func handleudp(lp net.PacketConn) {
 func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 	var headerlen = 0
 	hc := &http.Client{}
-	switch data[4] {
+	switch data[3] {
 	case 0x01:
 		headerlen = 0x0A
 		fmt.Println("udp data is ipv4")
@@ -257,8 +270,14 @@ func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 		headerlen = 0x16
 		fmt.Println("udp data is ipv6")
 	default:
+		//headerlen = (7 + data[4])
 		fmt.Println("udp data is domain")
 	}
+	n := len(data)
+	for i := 0; i < n; i++ {
+		data[i] = data[i] ^ opdata
+	}
+
 	body := bytes.NewReader(data[headerlen:])
 	hreq, _ := http.NewRequest("POST", hostname+"/dns", body)
 	resp, _ := hc.Do(hreq)
@@ -267,8 +286,12 @@ func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 	for i := 0; i < headerlen; i++ {
 		sendbuf[i] = data[i]
 	}
-	for i := headerlen; i-headerlen < len(buf); i++ {
+	n = len(buf)
+	for i := headerlen; i-headerlen < n; i++ {
 		sendbuf[i] = buf[i-headerlen]
+	}
+	for i := 0; i < headerlen+n; i++ {
+		sendbuf[i] = sendbuf[i] ^ opdata
 	}
 	lp.WriteTo(sendbuf[0:headerlen+len(buf)], addr)
 }
