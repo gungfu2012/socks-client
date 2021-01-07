@@ -41,6 +41,8 @@ type reqmsgret struct {
 
 const opdata uint8 = 21 //the xor opdata
 
+var hc *http.Client = &http.Client{}
+
 const hostnum = 9 //the num of hosts
 var hostarray [hostnum]string = [hostnum]string{
 			"http://127.0.0.1:8080", "https://socks-server-758011.asia1.kinto.io", "https://socks-server-11138b.us1.kinto.io", "https://socks-server-e4349c.eu1.kinto.io", "https://kintohub-eu.gungfu2012.workers.dev", "https://kintohub-us.gungfu2012.workers.dev", "https://kintohub-as1.gungfu2012.workers.dev", "https://kintohub-as2.gungfu2012.workers.dev", "https://kintohub-as3.gungfu2012.workers.dev"} //the hosts list
@@ -96,7 +98,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 
 	var body *bytes.Reader
 	var x_atyp string
-	fmt.Println("the addr type is :", req.atyp)
+	//fmt.Println("the addr type is :", req.atyp)
 	switch req.atyp {
 	case 0x01:
 		body = bytes.NewReader(recvbuf[4:10])
@@ -111,20 +113,20 @@ func socks5handshark(conn net.Conn, index int) bool {
 	switch req.cmd {
 	case 0x01:
 		fmt.Println("index :", index, "...start to post handshark")
-		fmt.Println("the ip and port is :", body)
-		hc := &http.Client{}
+		//fmt.Println("the ip and port is :", body)
+		//hc := &http.Client{}
 		hreq, _ := http.NewRequest("POST", hostname+"/handshark", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		hreq.Header.Add("x-atyp-2955", x_atyp)
-		resp, err := hc.Do(hreq)
-		fmt.Println("the error is :", err)
+		resp, _ := hc.Do(hreq)
+		//fmt.Println("the error is :", err)
 		if resp.StatusCode != 200 {
 			reqret.rep = 0x01
 		} else {
 			resp.Body.Read(httpbody[0:bufmax])
 			reqret.rep = 0x00
 		}
-		fmt.Println("index :", index, "...end to post handshark,the statuscoed is :", resp.StatusCode)
+		//fmt.Println("index :", index, "...end to post handshark,the statuscoed is :", resp.StatusCode)
 		resp.Body.Close()
 	case 0x03:
 		reqret.rep = 0x00
@@ -164,14 +166,14 @@ func post(conn net.Conn, index int) {
 	var recvbuf [bufmax]byte //客户端数据接收缓冲区
 	//var sendbuf [bufmax]byte  //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
-	hc := &http.Client{}
+	//hc := &http.Client{}
 	for {
 		if conn == nil {
 			fmt.Println("the client conn is closed")
 			return
 		}
 		n, err := conn.Read(recvbuf[0:bufmax])
-		fmt.Println("index :", index, "...read from client,the data lenth is :", n, "the error is :", err)
+		//fmt.Println("index :", index, "...read from client,the data lenth is :", n, "the error is :", err)
 		if err != nil {
 			conn.Close()
 			//hc.CloseIdleConnections()
@@ -181,7 +183,7 @@ func post(conn net.Conn, index int) {
 			//time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		fmt.Println("index :", index, "...start to post data")
+		//fmt.Println("index :", index, "...start to post data")
 		for i := 0; i < n; i++ {
 			recvbuf[i] = recvbuf[i] ^ opdata
 		}
@@ -189,7 +191,7 @@ func post(conn net.Conn, index int) {
 		hreq, _ := http.NewRequest("POST", hostname+"/post", body)
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		resp, _ := hc.Do(hreq)
-		fmt.Println("index :", index, "...end to post data,the status code is :", resp.StatusCode)
+		//fmt.Println("index :", index, "...end to post data,the status code is :", resp.StatusCode)
 		resp.Body.Close()
 	}
 }
@@ -198,7 +200,7 @@ func get(conn net.Conn, index int) {
 	//var recvbuf [bufmax]byte //客户端数据接收缓冲区
 	//var sendbuf [bufmax]byte //客户端数据发送缓冲区
 	//var httpbody [bufmax]byte //httpbody缓冲区
-	hc := &http.Client{}
+	//hc := &http.Client{}
 	hreq, _ := http.NewRequest("GET", hostname+"/get", nil)
 	hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 	for {
@@ -206,22 +208,22 @@ func get(conn net.Conn, index int) {
 			fmt.Println("the client conn is closed")
 			return
 		}
-		fmt.Println("index :", index, "...start to get data")
+		//fmt.Println("index :", index, "...start to get data")
 		resp, _ := hc.Do(hreq)
 		if resp.StatusCode == http.StatusBadRequest {
 			resp.Body.Close()
 			conn.Close()
 			break
 		}
-		fmt.Println("index :", index, "...end to get data,the status code is :", resp.StatusCode)
+		//fmt.Println("index :", index, "...end to get data,the status code is :", resp.StatusCode)
 		buf, err := ioutil.ReadAll(resp.Body)
-		fmt.Println("index :", index, "...read from remote ,the err is :", err)
+		//fmt.Println("index :", index, "...read from remote ,the err is :", err)
 		n := len(buf)
 		for i := 0; i < n; i++ {
 			buf[i] = buf[i] ^ opdata
 		}
 		n, err = conn.Write(buf)
-		fmt.Println("index :", index, "...send data to client ,the err is :", err, ",the data length is :", n)
+		//fmt.Println("index :", index, "...send data to client ,the err is :", err, ",the data length is :", n)
 		if err != nil {
 			conn.Close()
 			resp.Body.Close()
@@ -250,7 +252,7 @@ func handleudp(lp net.PacketConn) {
 	var buf [bufmax]byte
 	for {
 		n, addr, _ := lp.ReadFrom(buf[0:bufmax])
-		fmt.Println("got udp data,the length is :", n)
+		fmt.Println("got client udp,length :", n)
 		if n <= 0 {
 			continue
 		}
@@ -261,17 +263,18 @@ func handleudp(lp net.PacketConn) {
 
 func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 	var headerlen = 0
-	hc := &http.Client{}
+	//hc := &http.Client{}
 	switch data[3] {
 	case 0x01:
 		headerlen = 0x0A
-		fmt.Println("udp data is ipv4")
+		//fmt.Println("udp data is ipv4")
+		//fmt.Println("the upd dst is : ",data[4:10])
 	case 0x04:
 		headerlen = 0x16
-		fmt.Println("udp data is ipv6")
+		//fmt.Println("udp data is ipv6")
 	default:
 		//headerlen = (7 + data[4])
-		fmt.Println("udp data is domain")
+		//fmt.Println("udp data is domain")
 	}
 	n := len(data)
 	for i := 0; i < n; i++ {
@@ -287,6 +290,7 @@ func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 		sendbuf[i] = data[i]
 	}
 	n = len(buf)
+	fmt.Println("got server udp,length :",n)
 	for i := headerlen; i-headerlen < n; i++ {
 		sendbuf[i] = buf[i-headerlen]
 	}
@@ -331,7 +335,7 @@ func main() {
 			continue
 		}
 		//handleconnection
-		fmt.Println("got a connection from client, the index is :", index)
+		//fmt.Println("got a connection from client, the index is :", index)
 		go handleconnection(conn, index)
 		index = (index + 1) % 65536
 	}
