@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strconv"
 )
 
@@ -42,6 +43,15 @@ type reqmsgret struct {
 const opdata uint8 = 21 //the xor opdata
 
 var hc *http.Client = &http.Client{}
+var trace *httptrace.ClientTrace = &httptrace.ClientTrace{
+	GotConn: func(connInfo httptrace.GotConnInfo) {
+		fmt.Printf("Got Conn: %+v\n", connInfo)
+		fmt.Println("remote addr is :", connInfo.Conn.RemoteAddr().String())
+	},
+	DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
+		fmt.Printf("DNS Info: %+v\n", dnsInfo)
+	},
+}
 
 const hostnum = 9 //the num of hosts
 var hostarray [hostnum]string = [hostnum]string{
@@ -116,6 +126,7 @@ func socks5handshark(conn net.Conn, index int) bool {
 		//fmt.Println("the ip and port is :", body)
 		//hc := &http.Client{}
 		hreq, _ := http.NewRequest("POST", hostname+"/handshark", body)
+		hreq = hreq.WithContext(httptrace.WithClientTrace(hreq.Context(), trace))
 		hreq.Header.Add("x-index-2955", strconv.Itoa(index))
 		hreq.Header.Add("x-atyp-2955", x_atyp)
 		resp, _ := hc.Do(hreq)
@@ -252,7 +263,7 @@ func handleudp(lp net.PacketConn) {
 	var buf [bufmax]byte
 	for {
 		n, addr, _ := lp.ReadFrom(buf[0:bufmax])
-		fmt.Println("got client udp,length :", n)
+		//fmt.Println("got client udp,length :", n)
 		if n <= 0 {
 			continue
 		}
@@ -290,7 +301,7 @@ func postudp(lp net.PacketConn, addr net.Addr, data []byte) {
 		sendbuf[i] = data[i]
 	}
 	n = len(buf)
-	fmt.Println("got server udp,length :",n)
+	//fmt.Println("got server udp,length :", n)
 	for i := headerlen; i-headerlen < n; i++ {
 		sendbuf[i] = buf[i-headerlen]
 	}
